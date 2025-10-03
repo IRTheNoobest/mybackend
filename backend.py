@@ -27,7 +27,7 @@ app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "smartbiz-secret")
 CORS(app, supports_credentials=True)  # allow cookies/session headers
 
 # Initialize SocketIO **after app is created**
-socketio = SocketIO(app, cors_allowed_origins="*", manage_session=True, async_mode="gevent"))
+socketio = SocketIO(app, cors_allowed_origins="*", manage_session=True, async_mode="gevent")
 
 BASE_DIR = Path(__file__).resolve().parent
 
