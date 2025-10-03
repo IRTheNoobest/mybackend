@@ -215,8 +215,8 @@ if not os.path.exists(DB_NAME):
             if not cursor.fetchone():
                 # Insert admin user (owner role)
                 cursor.execute("""
-                    INSERT INTO users (username, password, role)
-                    VALUES (?, ?, ?)""", ("admin", "admin", "owner"))
+                    INSERT INTO users (username, password, role, ice)
+                    VALUES (?, ?, ?, ?)""", ("admin", "admin", "owner", "default_ice"))
                 owner_id = cursor.lastrowid
 
                 # Insert default store for admin
