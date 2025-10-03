@@ -4,9 +4,10 @@ flask-cors==3.0.10
 flask-socketio==5.3.6
 python-dotenv==1.0.0
 pandas==2.2.3
+
 # gevent stack for production SocketIO
 gevent==23.9.1
 gevent-websocket==0.10.1
-# common extras you may need (add more if your code imports them)
+
+# common extras
 python-dateutil==2.8.2
-# sqlite3 is in stdlib; if you use any DB drivers add them here (psycopg2-binary for Postgres, etc.)

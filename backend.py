@@ -1,5 +1,6 @@
 from flask import Flask, request, Response, jsonify, session, send_from_directory, send_file, g, json
 from flask_cors import CORS
+from flask_socketio import SocketIO, emit, join_room, leave_room
 from functools import wraps
 import sqlite3
 import os
@@ -18,7 +19,7 @@ import csv
 import pandas as pd
 import re
 from pathlib import Path
-from flask_socketio import SocketIO, emit, join_room, leave_room
+
 
 # ----------------- APP SETUP -----------------
 app = Flask(__name__)
@@ -2764,13 +2765,11 @@ def handle_stop_typing(data):
     emit("stop_typing", {"sender_id": f'{user["role"]}:{user["user_id"]}'}, room=room, include_self=False)
 
 if __name__ == "__main__":
-    # Local dev server using gevent + WebSocketHandler (matches production gevent behavior)
     import os
     try:
         from gevent import pywsgi
         from geventwebsocket.handler import WebSocketHandler
     except Exception as e:
-        # Fallback to Flask dev server if gevent is not available locally
         print("gevent/geventwebsocket not available, falling back to Flask dev server. Error:", e)
         port = int(os.environ.get("PORT", 5000))
         app.run(host="0.0.0.0", port=port)
