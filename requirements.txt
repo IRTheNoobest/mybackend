@@ -2,6 +2,11 @@ Flask==2.3.3
 gunicorn==20.1.0
 flask-cors==3.0.10
 flask-socketio==5.3.6
-gevent==24.2.1
 python-dotenv==1.0.0
-pandas
+pandas==2.2.3
+# gevent stack for production SocketIO
+gevent==23.12.0
+gevent-websocket==0.10.1
+# common extras you may need (add more if your code imports them)
+python-dateutil==2.8.2
+# sqlite3 is in stdlib; if you use any DB drivers add them here (psycopg2-binary for Postgres, etc.)

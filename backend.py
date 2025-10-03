@@ -1,5 +1,3 @@
-import eventlet
-eventlet.monkey_patch()
 from flask import Flask, request, Response, jsonify, session, send_from_directory, send_file, g, json
 from flask_cors import CORS
 from functools import wraps
@@ -28,7 +26,7 @@ app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "smartbiz-secret")
 CORS(app, supports_credentials=True)  # allow cookies/session headers
 
 # Initialize SocketIO **after app is created**
-socketio = SocketIO(app, cors_allowed_origins="*", manage_session=True)
+socketio = SocketIO(app, cors_allowed_origins="*", manage_session=True, async_mode="gevent"))
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -2766,5 +2764,18 @@ def handle_stop_typing(data):
     emit("stop_typing", {"sender_id": f'{user["role"]}:{user["user_id"]}'}, room=room, include_self=False)
 
 if __name__ == "__main__":
+    # Local dev server using gevent + WebSocketHandler (matches production gevent behavior)
     import os
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    try:
+        from gevent import pywsgi
+        from geventwebsocket.handler import WebSocketHandler
+    except Exception as e:
+        # Fallback to Flask dev server if gevent is not available locally
+        print("gevent/geventwebsocket not available, falling back to Flask dev server. Error:", e)
+        port = int(os.environ.get("PORT", 5000))
+        app.run(host="0.0.0.0", port=port)
+    else:
+        port = int(os.environ.get("PORT", 5000))
+        http_server = pywsgi.WSGIServer(("0.0.0.0", port), app, handler_class=WebSocketHandler)
+        print(f"Starting local gevent WSGI server on port {port}")
+        http_server.serve_forever()
