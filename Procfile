@@ -1,1 +1,1 @@
-web: gunicorn backend:app --workers 2 --worker-class eventlet --bind 0.0.0.0:$PORT
+web: gunicorn backend:app --workers 2 --worker-class gevent --bind 0.0.0.0:$PORT
