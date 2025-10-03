@@ -56,15 +56,6 @@ def close_connection(exception):
     if db is not None:
         db.close()
 
-def open_browser():
-    time.sleep(1)
-    webbrowser.open("http://localhost:8000")
-
-def run_frontend_server():
-    frontend_dir = r"D:\CODE PROJECTS\SME - Financial oversight and POS\Smart Biz Manager"
-    os.chdir(frontend_dir)
-    subprocess.Popen(["python", "-m", "http.server", "8080"])
-
 def init_db():
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
@@ -255,6 +246,11 @@ def serve_frontend(path):
     frontend_dir = r"D:\CODE PROJECTS\SME - Financial oversight and POS\Smart Biz Manager"
     return send_from_directory(frontend_dir, path)
 
+@app.route("/ping", methods=["GET"])
+def ping():
+    return jsonify({"status": "ok"})
+
+
 @app.route("/register", methods=["POST"])
 def register():
     data = request.json
@@ -293,76 +289,6 @@ def register():
 
     return jsonify({"message": "Account and store created successfully."})
 
-
-#@app.route("/login", methods=["POST"])
-#def login():
-#    data = request.json
-#    username = data.get("username")
-#    password = data.get("password")
-#
-#    if not username or not password:
-#        return jsonify({"error": "Missing credentials"}), 400
-#
-#    with sqlite3.connect(DB_NAME) as conn:
-#        cursor = conn.cursor()
-#
-#        # ---- Check owners ----
-#        cursor.execute("""
-#            SELECT id, username, role
-#            FROM users
-#            WHERE username=? AND password=?
-#        """, (username, password))
-#        row = cursor.fetchone()
-#
-#        if row:
-#            user_id, username, role = row
-#            cursor.execute("SELECT id, name FROM stores WHERE owner_id=?", (user_id,))
-#            stores = cursor.fetchall()
-#            stores_list = [{"id": s[0], "name": s[1]} for s in stores]
-#
-#            # ✅ Set session
-#            session['user_id'] = user_id
-#            session['role'] = role if role else "owner"
-#            session['store_id'] = stores_list[0]['id'] if stores_list else None
-#
-#            return jsonify({
-#                "user_id": user_id,
-#                "username": username,
-#                "role": role if role else "owner",
-#                "stores": stores_list,
-#                "owner_id": user_id,
-#                "store_id": session['store_id']
-#            }), 200
-#
-#        # ---- Check workers ----
-#        cursor.execute("""
-#            SELECT id, username, store_id
-#            FROM workers
-#            WHERE username=? AND password=?
-#        """, (username, password))
-#        row = cursor.fetchone()
-#
-#        if row:
-#            user_id, username, store_id = row
-#            cursor.execute("SELECT name FROM stores WHERE id=?", (store_id,))
-#            store_row = cursor.fetchone()
-#            store_name = store_row[0] if store_row else "Unknown Store"
-#
-#            # ✅ Set session
-#            session['user_id'] = user_id
-#            session['role'] = "worker"
-#            session['store_id'] = store_id
-#
-#            return jsonify({
-#                "user_id": user_id,
-#                "username": username,
-#                "role": "worker",
-#                "stores": [{"id": store_id, "name": store_name}],
-#                "store_id": store_id
-#            }), 200
-#
-#        return jsonify({"error": "Invalid credentials"}), 401
-#
 
 @app.route("/login", methods=["POST"])
 def login():
@@ -2838,3 +2764,7 @@ def handle_stop_typing(data):
         recipient_id = f"{'worker' if user['role']=='owner' else 'owner'}:{recipient_id}"
     room = get_room_name(f'{user["role"]}:{user["user_id"]}', recipient_id)
     emit("stop_typing", {"sender_id": f'{user["role"]}:{user["user_id"]}'}, room=room, include_self=False)
+
+if __name__ == "__main__":
+    import os
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
