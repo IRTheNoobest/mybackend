@@ -27,10 +27,14 @@ app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "smartbiz-secret")
 app.config["SESSION_COOKIE_SAMESITE"] = "None"
 app.config["SESSION_COOKIE_SECURE"] = True
 
-CORS(app, supports_credentials=True, origins=["https://iqtisade.onrender.com", "*"])
+CORS(
+    app,
+    supports_credentials=True,
+    resources={r"/*": {"origins": ["null", "https://iqtisade.onrender.com"]}},
+)
 
-# Initialize SocketIO **after app is created**
-socketio = SocketIO(app, cors_allowed_origins="*", manage_session=True, async_mode="gevent")
+# Initialize SocketIO
+socketio = SocketIO(app, cors_allowed_origins=["null", "https://iqtisade.onrender.com"], manage_session=True, async_mode="gevent")
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -295,13 +299,20 @@ def register():
 
 @app.after_request
 def add_cors_headers(response):
-    response.headers["Access-Control-Allow-Origin"] = "*"
+    origin = request.headers.get("Origin")
+    if origin in ["null", "https://iqtisade.onrender.com"]:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
-    response.headers["Access-Control-Allow-Methods"] = "POST,OPTIONS"
+    response.headers["Access-Control-Allow-Methods"] = "POST,OPTIONS,GET"
     return response
+
 
 @app.route("/login", methods=["POST", "OPTIONS"])
 def login():
+    if request.method == "OPTIONS":
+        return jsonify({"status": "ok"}), 200
+
     data = request.get_json(force=True, silent=True)
     if not data:
         return jsonify({"error": "No data received"}), 400
@@ -317,10 +328,7 @@ def login():
         cursor = conn.cursor()
 
         # ---- Check owners ----
-        cursor.execute(
-            "SELECT id, username, role, password FROM users WHERE username=?",
-            (username,),
-        )
+        cursor.execute("SELECT id, username, role, password FROM users WHERE username=?", (username,))
         row = cursor.fetchone()
 
         if row:
@@ -337,22 +345,17 @@ def login():
             session["store_id"] = stores_list[0]["id"] if stores_list else None
             session["last_active"] = datetime.utcnow().isoformat()
 
-            return jsonify(
-                {
-                    "user_id": user_id,
-                    "username": row["username"],
-                    "role": role,
-                    "stores": stores_list,
-                    "owner_id": user_id,
-                    "store_id": session["store_id"],
-                }
-            )
+            return jsonify({
+                "user_id": user_id,
+                "username": row["username"],
+                "role": role,
+                "stores": stores_list,
+                "owner_id": user_id,
+                "store_id": session["store_id"],
+            })
 
         # ---- Check workers ----
-        cursor.execute(
-            "SELECT id, username, password, store_id FROM workers WHERE username=?",
-            (username,),
-        )
+        cursor.execute("SELECT id, username, password, store_id FROM workers WHERE username=?", (username,))
         row = cursor.fetchone()
 
         if row:
@@ -369,17 +372,16 @@ def login():
             session["store_id"] = store_id
             session["last_active"] = datetime.utcnow().isoformat()
 
-            return jsonify(
-                {
-                    "user_id": user_id,
-                    "username": row["username"],
-                    "role": "worker",
-                    "stores": [{"id": store_id, "name": store_name}],
-                    "store_id": store_id,
-                }
-            )
+            return jsonify({
+                "user_id": user_id,
+                "username": row["username"],
+                "role": "worker",
+                "stores": [{"id": store_id, "name": store_name}],
+                "store_id": store_id,
+            })
 
     return jsonify({"error": "Invalid credentials"}), 401
+
 
 @app.route("/session_user")
 def session_user():
