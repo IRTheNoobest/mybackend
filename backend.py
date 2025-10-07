@@ -24,7 +24,10 @@ from pathlib import Path
 # ----------------- APP SETUP -----------------
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "smartbiz-secret")
-CORS(app, supports_credentials=True)  # allow cookies/session headers
+app.config["SESSION_COOKIE_SAMESITE"] = "None"
+app.config["SESSION_COOKIE_SECURE"] = True
+
+CORS(app, supports_credentials=True, origins=["https://iqtisade.onrender.com", "*"])
 
 # Initialize SocketIO **after app is created**
 socketio = SocketIO(app, cors_allowed_origins="*", manage_session=True, async_mode="gevent")
@@ -41,11 +44,12 @@ ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "gif", "mp4", "mov", "mp3", 
 
 # ----------------- DATABASE -----------------
 DB_NAME = "smartbiz.db"
+DB_PATH = BASE_DIR / DB_NAME
 
 def get_db():
     db = getattr(g, "_database", None)
     if db is None:
-        db = g._database = sqlite3.connect(DB_NAME)
+        db = g._database = sqlite3.connect(DB_PATH)
         db.row_factory = sqlite3.Row
     return db
 
@@ -56,7 +60,7 @@ def close_connection(exception):
         db.close()
 
 def init_db():
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
 
         # ----------- USERS -----------
@@ -209,7 +213,7 @@ if not os.path.exists(DB_NAME):
     init_db()
 
     def create_default_admin():
-        with sqlite3.connect(DB_NAME) as conn:
+        with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM users WHERE username = ?", ("admin",))
             if not cursor.fetchone():
@@ -238,12 +242,12 @@ if not os.path.exists(DB_NAME):
     create_default_admin()
 
 # === API Routes ===
+# --- Frontend serving disabled; handled by APK ---
+# @app.route("/", defaults={"path": "index.html"})
+# @app.route("/<path:path>")
+# def serve_frontend(path):
+#     return send_from_directory("assets", path)
 
-@app.route("/", defaults={"path": "index.html"})
-@app.route("/<path:path>")
-def serve_frontend(path):
-    frontend_dir = r"D:\CODE PROJECTS\SME - Financial oversight and POS\Smart Biz Manager"
-    return send_from_directory(frontend_dir, path)
 
 @app.route("/ping", methods=["GET"])
 def ping():
@@ -263,7 +267,7 @@ def register():
     if not all([username, password, email, phone, store_name, ice]):
         return jsonify({"error": "All fields including ICE are required"}), 400
 
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
 
         # Check if username already exists
@@ -298,7 +302,7 @@ def login():
     if not username or not password:
         return jsonify({"error": "Missing credentials"}), 400
 
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
@@ -388,8 +392,8 @@ def verify_password():
     if not user_id or not input_password:
         return jsonify({"error": "Missing credentials"}), 400
 
-    #conn = sqlite3.connect("smartbiz.db")
-    conn = sqlite3.connect("smartbiz.db")
+    #conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     try:
         cursor.execute("SELECT password FROM users WHERE id = ?", (user_id,))
@@ -418,7 +422,7 @@ def add_store():
     if not name or not ice or not owner_id:
         return jsonify({"error": "Missing store data"}), 400
 
-    con = sqlite3.connect(DB_NAME)
+    con = sqlite3.connect(DB_PATH)
     cur = con.cursor()
     cur.execute("INSERT INTO stores (name, ice, owner_id) VALUES (?, ?, ?)", (name, ice, owner_id))
     con.commit()
@@ -433,7 +437,7 @@ def remove_store():
     if not store_id:
         return jsonify({"error": "Missing store ID"}), 400
 
-    conn = sqlite3.connect("smartbiz.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     try:
         cursor.execute("DELETE FROM stores WHERE id = ?", (store_id,))
@@ -453,7 +457,7 @@ def get_stores():
     if not owner_id:
         return jsonify({"error": "Missing owner_id"}), 400
 
-    conn = sqlite3.connect("smartbiz.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     try:
         # Only fetch stores that belong to this owner
@@ -476,7 +480,7 @@ def update_store():
     if not all([store_id, name, ice]):
         return jsonify({"error": "Missing required fields"}), 400
 
-    conn = sqlite3.connect("smartbiz.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     try:
         cursor.execute("""
@@ -510,7 +514,7 @@ def get_performance_data():
             except ValueError:
                 return jsonify({"error": "Invalid store_id"}), 400
 
-        conn = sqlite3.connect("smartbiz.db")
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         is_all = (store_id == "all" or store_id is None)
 
@@ -702,7 +706,7 @@ def delete_user():
     if not user_id or not role:
         return jsonify({"error": "Missing user_id or role"}), 400
 
-    conn = sqlite3.connect("smartbiz.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     try:
@@ -723,7 +727,7 @@ def get_users():
         data = request.get_json()
         owner_id = data.get("owner_id")
 
-        with sqlite3.connect(DB_NAME) as conn:
+        with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
 
             # 1. Get owners (only this owner)
@@ -761,7 +765,7 @@ def get_users():
 
 @app.route("/get_workers")  # Not used yet as of 16/07/25
 def get_workers():
-    con = sqlite3.connect(DB_NAME)
+    con = sqlite3.connect(DB_PATH)
     cur = con.cursor()
     cur.execute("""
         SELECT workers.id, workers.username, workers.store_id, stores.name AS store_name
@@ -785,7 +789,7 @@ def get_workers():
 #    data = request.get_json()
 #    owner_id = data.get("owner_id")
 #
-#    conn = sqlite3.connect("smartbiz.db")
+#    conn = sqlite3.connect(DB_PATH)
 #    cursor = conn.cursor()
 #
 #    query = """
@@ -812,7 +816,7 @@ def get_workers():
 #
 #@app.route("/get_users")
 #def get_users():
-#    con = sqlite3.connect(DB_NAME)
+#    con = sqlite3.connect(DB_PATH)
 #    cur = con.cursor()
 #    # Include store_id in select
 #    cur.execute("SELECT id, username, role, store_id FROM users")
@@ -837,7 +841,7 @@ def edit_sale():
     new_qty = data.get("quantity")
     discount = data.get("discount", 0)
 
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
 
@@ -884,7 +888,7 @@ def delete_sale():
     if not username or not password:
         return jsonify({"success": False, "error": "Missing credentials"})
 
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
 
@@ -936,7 +940,7 @@ def get_sales_by_receipt():
     if not receipt_id or not store_id:
         return jsonify([])
 
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
 
@@ -957,7 +961,7 @@ def get_sales():
     data = request.json
     print("Received data:", data)
     store_id = data.get("store_id")
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
         cursor.execute("""
             SELECT timestamp, product, quantity, price, total
@@ -998,7 +1002,7 @@ def submit_sale():
     receipt_id = re.sub(r"[^\w]", "", now)  # e.g., 2025-08-06T03:30:12.123456 -> 20250806T033012123456
 
     try:
-        with sqlite3.connect(DB_NAME) as conn:
+        with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
 
             # Fetch store ICE from stores table using store_id
@@ -1077,7 +1081,7 @@ def update_inventory():
     if not all([store_id, product, quantity is not None]):
         return jsonify({"error": "Missing required fields"}), 400
 
-    conn = sqlite3.connect("smartbiz.db")
+    conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
 
     cur.execute("SELECT quantity FROM inventory WHERE store_id = ? AND product = ?", (store_id, product))
@@ -1099,7 +1103,7 @@ def update_inventory():
 def get_inventory():
     data = request.json
     store_id = data.get("store_id")
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT product, quantity, price FROM inventory WHERE store_id=?", (store_id,))
         rows = cursor.fetchall()
@@ -1117,7 +1121,7 @@ def add_inventory_check():
     if not all([store_id, worker_id, product_id, counted_quantity is not None]):
         return jsonify({"error": "Missing fields"}), 400
 
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
 
         # Get expected quantity
@@ -1145,7 +1149,7 @@ def get_inventory_checks():
     if not store_id:
         return jsonify({"error": "Missing store_id"}), 400
 
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
         cursor.execute("""
             SELECT ic.id, w.username, i.product, ic.expected_quantity, ic.counted_quantity, ic.status, ic.timestamp, ic.product_id
@@ -1179,7 +1183,7 @@ def validate_mismatch():
     if not checker_id:
         return jsonify({"error": "Missing checker_id"}), 400
 
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
         # Get the inventory_checker record
         cursor.execute("SELECT store_id, product_id, counted_quantity FROM inventory_checker WHERE id = ?", (checker_id,))
@@ -1211,7 +1215,7 @@ def disprove_mismatch():
     if not checker_id:
         return jsonify({"error": "Missing checker_id"}), 400
 
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM inventory_checker WHERE id = ?", (checker_id,))
         if not cursor.fetchone():
@@ -1225,7 +1229,7 @@ def disprove_mismatch():
 @app.route("/status_log/<int:product_id>", methods=["GET"])
 def get_status_log(product_id):
     try:
-        with sqlite3.connect(DB_NAME) as conn:
+        with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
             c.execute("""
                 SELECT ic.id, ic.timestamp, ic.expected_quantity, ic.counted_quantity,
@@ -1255,7 +1259,7 @@ def get_status_log(product_id):
 def get_disproved_checks():
     data = request.get_json()
     store_id = data.get("store_id")
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         c.execute("""
             SELECT ic.timestamp, w.username as worker, i.product,
@@ -1287,7 +1291,7 @@ def owner_validate_check():
     if not all([check_id, owner_id, approve is not None]):
         return jsonify({"error": "Missing fields"}), 400
 
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
 
         # 1. Get check entry
@@ -1323,7 +1327,7 @@ def get_kpis():
     data = request.json
     store_id = data["store_id"]
 
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
 
         # Total revenue
@@ -1362,7 +1366,7 @@ def owner_product_list():
     if not owner_id:
         return jsonify({"error": "owner_id missing"}), 400
 
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -1387,7 +1391,7 @@ def get_product_kpis():
     if not owner_id or not product:
         return jsonify({"error": "owner_id or product missing"}), 400
 
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     # Get all store ids owned by this owner
@@ -1517,7 +1521,7 @@ def compare_products():
     if not owner_id or not products or not isinstance(products, list) or len(products) < 2:
         return jsonify({"error": "owner_id and at least 2 products required"}), 400
 
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     cursor.execute("SELECT id, name FROM stores WHERE owner_id = ?", (owner_id,))
@@ -1559,7 +1563,7 @@ def alerts():
     if not owner_id:
         return jsonify({"error": "owner_id missing"}), 400
 
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     # Example alert: products with price changes > 10% in last 30 days
@@ -1610,7 +1614,7 @@ def import_inventory():
 
         store_id_int = int(store_id)
 
-        conn = sqlite3.connect(DB_NAME)
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
 
         for _, row in df.iterrows():
@@ -1654,7 +1658,7 @@ def export_product_data():
     if not owner_id or not product:
         return jsonify({"error": "owner_id or product missing"}), 400
 
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     # Get sales data with optional date filter
@@ -1703,7 +1707,7 @@ def export_product_data():
 
 @app.route('/export_sales')
 def export_sales():
-    conn = sqlite3.connect("smartbiz.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -1735,7 +1739,7 @@ def export_sales():
 def get_busy_hours():
     data = request.json
     store_id = data["store_id"]
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT timestamp FROM sales WHERE store_id=?", (store_id,))
         hours = [datetime.fromisoformat(row[0]).hour for row in cursor.fetchall() if row[0]]
@@ -1754,7 +1758,7 @@ def add_credit():
     if not all([store_id, client, tab_value is not None, total is not None, user_id]):
         return jsonify({"error": "Missing fields"}), 400
 
-    conn = sqlite3.connect("smartbiz.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     # Confirm the user_id is from workers table
@@ -1783,7 +1787,7 @@ def get_credits():
     if not store_id:
         return jsonify({"error": "Missing store ID"}), 400
 
-    conn = sqlite3.connect("smartbiz.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -1819,7 +1823,7 @@ def pay_credit():
     if not all([store_id, client, amount]):
         return jsonify({"error": "Missing fields"}), 400
 
-    conn = sqlite3.connect("smartbiz.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -1865,7 +1869,7 @@ def get_owner_inventory():
     if not store_id:
         return jsonify({"error": "Missing store_id"}), 400
 
-    conn = sqlite3.connect("smartbiz.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT id, product, quantity, cost, price FROM inventory WHERE store_id = ?", (store_id,))
     rows = cursor.fetchall()
@@ -1886,7 +1890,7 @@ def update_inventory_owner():
     if not all([store_id, inventory_id]):
         return jsonify({"error": "Missing fields"}), 400
 
-    conn = sqlite3.connect("smartbiz.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
     c.execute("""
@@ -1909,7 +1913,7 @@ def update_inventory_worker():
     if not all([store_id, product, quantity is not None]):
         return jsonify({"error": "Missing fields"}), 400
 
-    conn = sqlite3.connect("smartbiz.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
     c.execute("SELECT id, quantity FROM inventory WHERE store_id = ? AND product = ?", (store_id, product))
@@ -1944,7 +1948,7 @@ def search_inventory():
     if not store_id or not query:
         return jsonify({"error": "Missing store_id or query"}), 400
 
-    conn = sqlite3.connect("smartbiz.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     # Search by product name or barcode (barcode column assumed; if missing, remove barcode part)
@@ -1977,7 +1981,7 @@ def manage_inventory():
     if not all([store_id, product, quantity is not None, cost is not None, price is not None]):
         return jsonify({"error": "Missing fields"}), 400
 
-    conn = sqlite3.connect("smartbiz.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     # Check if product exists
@@ -2025,7 +2029,7 @@ def delete_inventory():
     if not all([store_id, product]):
         return jsonify({"error": "Missing fields"}), 400
 
-    conn = sqlite3.connect("smartbiz.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("DELETE FROM inventory WHERE store_id = ? AND product = ?", (store_id, product))
     conn.commit()
@@ -2034,14 +2038,14 @@ def delete_inventory():
     return jsonify({"message": "🗑️ Product deleted"})
 
 def get_user_by_username(username):
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
         return cursor.fetchone()
 
 def ensure_user_settings_columns():
     """Run once on app startup to add columns if missing."""
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
         # Map of column name => type
         columns_to_add = {
@@ -2082,7 +2086,7 @@ def change_password():
         return jsonify({"error": "Old password incorrect"}), 403
 
     new_hash = generate_password_hash(new_password)
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
         cursor.execute("UPDATE users SET password = ? WHERE username = ?", (new_hash, username))
         conn.commit()
@@ -2102,7 +2106,7 @@ def update_email():
     if not user:
         return jsonify({"error": "User not found"}), 404
 
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
         cursor.execute("UPDATE users SET email = ? WHERE username = ?", (new_email, username))
         conn.commit()
@@ -2122,7 +2126,7 @@ def update_phone():
     if not user:
         return jsonify({"error": "User not found"}), 404
 
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
         cursor.execute("UPDATE users SET phone = ? WHERE username = ?", (new_phone, username))
         conn.commit()
@@ -2165,7 +2169,7 @@ def set_language():
     if not user:
         return jsonify({"error": "User not found"}), 404
 
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
         cursor.execute("UPDATE users SET language = ? WHERE username = ?", (language, username))
         conn.commit()
@@ -2185,7 +2189,7 @@ def set_theme():
     if not user:
         return jsonify({"error": "User not found"}), 404
 
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
         cursor.execute("UPDATE users SET theme = ? WHERE username = ?", (theme, username))
         conn.commit()
@@ -2206,7 +2210,7 @@ def set_accessibility():
     if not user:
         return jsonify({"error": "User not found"}), 404
 
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
         if high_contrast is not None:
             cursor.execute("UPDATE users SET high_contrast = ? WHERE username = ?", (high_contrast, username))
@@ -2225,7 +2229,7 @@ def owner_profile_page():
 
 @app.route("/api/owner/profile/<int:user_id>", methods=["GET"])
 def get_owner_profile(user_id):
-    with sqlite3.connect("smartbiz.db") as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         c.execute("""
             SELECT username, email, phone, ice, role, language, theme,
@@ -2277,7 +2281,7 @@ def update_owner_profile():
     if not user_id:
         return jsonify({"error": "Missing user_id"}), 400
 
-    with sqlite3.connect("smartbiz.db") as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         if password:
             c.execute("""
@@ -2312,7 +2316,7 @@ def update_owner_pic():
 
     web_path = f"/static/uploads/{filename}"
 
-    with sqlite3.connect("smartbiz.db") as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         c.execute("UPDATE users SET profile_pic=? WHERE id=?", (web_path, user_id))
         conn.commit()
@@ -2327,7 +2331,7 @@ def profile_page():
 
 @app.route("/api/worker/profile/<int:worker_id>", methods=["GET"])
 def get_worker_profile(worker_id):
-    with sqlite3.connect("smartbiz.db") as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         c.execute("""
             SELECT name, lastname, username, email, created_at, profile_pic
@@ -2367,7 +2371,7 @@ def update_worker_profile():
     if not worker_id:
         return jsonify({"error": "Missing user_id"}), 400
 
-    with sqlite3.connect("smartbiz.db") as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         if password:
             c.execute("""
@@ -2400,7 +2404,7 @@ def update_worker_pic():
     # Always store normalized web path (with forward slashes)
     web_path = f"/static/uploads/{filename}"
 
-    with sqlite3.connect("smartbiz.db") as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         c.execute("UPDATE workers SET profile_pic=? WHERE id=?", (web_path, worker_id))
         conn.commit()
@@ -2410,7 +2414,7 @@ def update_worker_pic():
 @app.route("/api/worker/performance/<int:worker_id>", methods=["GET"])
 def worker_performance(worker_id):
     try:
-        with sqlite3.connect("smartbiz.db") as conn:
+        with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
 
             # Total sales and total products sold
@@ -2476,7 +2480,7 @@ def get_staff():
     if not owner_id:
         return jsonify({"error": "Missing owner_id"}), 400
 
-    conn = sqlite3.connect("smartbiz.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     try:
@@ -2529,7 +2533,7 @@ user_rooms = {}        # sid -> room
 connected_users = {}   # sid -> {"user_id": ..., "role": ...}
 
 def _ensure_chat_table():
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS chat_messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2592,7 +2596,7 @@ def get_contacts():
     user_id = user["user_id"]
     role = user["role"]
 
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
@@ -2653,7 +2657,7 @@ def get_chat_history(other_id):
     room = get_room_name(user_id, other_id)
     print(f"Fetching chat history for room: {room}")  # DEBUG
 
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("""
@@ -2721,7 +2725,7 @@ def on_message(data):
         print("Message rejected: missing room, msg, or sender info")
         return
 
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
         cur.execute(
