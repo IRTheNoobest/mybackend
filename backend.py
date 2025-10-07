@@ -295,7 +295,21 @@ def register():
 
 @app.route("/login", methods=["POST"])
 def login():
-    data = request.json
+    print("💡 /login called")
+    print("Headers:", dict(request.headers))
+    print("Content-Type:", request.content_type)
+    print("Raw body:", request.data)
+
+    try:
+        data = request.get_json(force=True, silent=True)
+        print("Parsed JSON:", data)
+    except Exception as e:
+        print("❌ JSON parse error:", e)
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    if not data:
+        return jsonify({"error": "No data received"}), 400
+
     username = data.get("username")
     password = data.get("password")
 
@@ -311,6 +325,8 @@ def login():
         row = cursor.fetchone()
 
         if row:
+            print(f"✅ Owner found: {username}")
+
             # Uncomment if password hashing is used:
             # from werkzeug.security import check_password_hash
             # if not check_password_hash(row["password"], password):
@@ -343,6 +359,8 @@ def login():
         row = cursor.fetchone()
 
         if row:
+            print(f"✅ Worker found: {username}")
+
             # Uncomment if password hashing is used
             # if not check_password_hash(row["password"], password):
             #     return jsonify({"error": "Invalid credentials"}), 401
@@ -368,7 +386,9 @@ def login():
                 "store_id": store_id
             })
 
+    print("❌ Invalid credentials for:", username)
     return jsonify({"error": "Invalid credentials"}), 401
+
 
 @app.route("/session_user")
 def session_user():
