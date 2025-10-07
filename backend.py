@@ -1,4 +1,4 @@
-from flask import Flask, request, Response, jsonify, session, send_from_directory, send_file, g, json
+from flask import Flask, request, Response, jsonify, session, send_from_directory, send_file, g, json, make_response
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from functools import wraps
@@ -293,20 +293,16 @@ def register():
     return jsonify({"message": "Account and store created successfully."})
 
 
-@app.route("/login", methods=["POST"])
+@app.after_request
+def add_cors_headers(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+    response.headers["Access-Control-Allow-Methods"] = "POST,OPTIONS"
+    return response
+
+@app.route("/login", methods=["POST", "OPTIONS"])
 def login():
-    print("💡 /login called")
-    print("Headers:", dict(request.headers))
-    print("Content-Type:", request.content_type)
-    print("Raw body:", request.data)
-
-    try:
-        data = request.get_json(force=True, silent=True)
-        print("Parsed JSON:", data)
-    except Exception as e:
-        print("❌ JSON parse error:", e)
-        return jsonify({"error": "Invalid JSON"}), 400
-
+    data = request.get_json(force=True, silent=True)
     if not data:
         return jsonify({"error": "No data received"}), 400
 
@@ -321,17 +317,13 @@ def login():
         cursor = conn.cursor()
 
         # ---- Check owners ----
-        cursor.execute("SELECT id, username, role, password FROM users WHERE username=?", (username,))
+        cursor.execute(
+            "SELECT id, username, role, password FROM users WHERE username=?",
+            (username,),
+        )
         row = cursor.fetchone()
 
         if row:
-            print(f"✅ Owner found: {username}")
-
-            # Uncomment if password hashing is used:
-            # from werkzeug.security import check_password_hash
-            # if not check_password_hash(row["password"], password):
-            #     return jsonify({"error": "Invalid credentials"}), 401
-
             user_id = row["id"]
             role = row["role"] or "owner"
 
@@ -340,31 +332,30 @@ def login():
             stores_list = [{"id": s["id"], "name": s["name"]} for s in stores]
 
             session.permanent = True
-            session['user_id'] = user_id
-            session['role'] = role
-            session['store_id'] = stores_list[0]['id'] if stores_list else None
-            session['last_active'] = datetime.utcnow().isoformat()
+            session["user_id"] = user_id
+            session["role"] = role
+            session["store_id"] = stores_list[0]["id"] if stores_list else None
+            session["last_active"] = datetime.utcnow().isoformat()
 
-            return jsonify({
-                "user_id": user_id,
-                "username": row["username"],
-                "role": role,
-                "stores": stores_list,
-                "owner_id": user_id,
-                "store_id": session['store_id']
-            })
+            return jsonify(
+                {
+                    "user_id": user_id,
+                    "username": row["username"],
+                    "role": role,
+                    "stores": stores_list,
+                    "owner_id": user_id,
+                    "store_id": session["store_id"],
+                }
+            )
 
         # ---- Check workers ----
-        cursor.execute("SELECT id, username, password, store_id FROM workers WHERE username=?", (username,))
+        cursor.execute(
+            "SELECT id, username, password, store_id FROM workers WHERE username=?",
+            (username,),
+        )
         row = cursor.fetchone()
 
         if row:
-            print(f"✅ Worker found: {username}")
-
-            # Uncomment if password hashing is used
-            # if not check_password_hash(row["password"], password):
-            #     return jsonify({"error": "Invalid credentials"}), 401
-
             user_id = row["id"]
             store_id = row["store_id"]
 
@@ -373,22 +364,22 @@ def login():
             store_name = store_row["name"] if store_row else "Unknown Store"
 
             session.permanent = True
-            session['user_id'] = user_id
-            session['role'] = "worker"
-            session['store_id'] = store_id
-            session['last_active'] = datetime.utcnow().isoformat()
+            session["user_id"] = user_id
+            session["role"] = "worker"
+            session["store_id"] = store_id
+            session["last_active"] = datetime.utcnow().isoformat()
 
-            return jsonify({
-                "user_id": user_id,
-                "username": row["username"],
-                "role": "worker",
-                "stores": [{"id": store_id, "name": store_name}],
-                "store_id": store_id
-            })
+            return jsonify(
+                {
+                    "user_id": user_id,
+                    "username": row["username"],
+                    "role": "worker",
+                    "stores": [{"id": store_id, "name": store_name}],
+                    "store_id": store_id,
+                }
+            )
 
-    print("❌ Invalid credentials for:", username)
     return jsonify({"error": "Invalid credentials"}), 401
-
 
 @app.route("/session_user")
 def session_user():
