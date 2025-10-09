@@ -2648,7 +2648,7 @@ def get_contacts():
         store_name = store_row["name"]
         owner_id = store_row["owner_id"]
 
-        cursor.execute("SELECT id, username as name, profile_pic FROM workers WHERE store_id= AND id !=?", (store_id,))
+        cursor.execute("SELECT id, username as name, profile_pic FROM workers WHERE store_id=?", (store_id,))
         coworkers = [_row_to_worker_dict(dict(w)) for w in cursor.fetchall()]
 
         cursor.execute("SELECT id, username as name, profile_pic FROM users WHERE id=?", (owner_id,))
