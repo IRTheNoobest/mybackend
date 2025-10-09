@@ -34,7 +34,15 @@ CORS(
 )
 
 # Initialize SocketIO
-socketio = SocketIO(app, cors_allowed_origins=["null", "https://iqtisade.onrender.com"], manage_session=True, async_mode="gevent")
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    async_mode="gevent",
+    ping_timeout=20,
+    ping_interval=5,
+    manage_session=True
+)
+
 
 BASE_DIR = Path(__file__).resolve().parent
 
