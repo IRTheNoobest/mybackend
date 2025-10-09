@@ -19,7 +19,8 @@ import csv
 import pandas as pd
 import re
 from pathlib import Path
-
+from gevent import pywsgi
+from geventwebsocket.handler import WebSocketHandler
 
 # ----------------- APP SETUP -----------------
 app = Flask(__name__)
@@ -2790,16 +2791,6 @@ def handle_stop_typing(data):
     emit("stop_typing", {"sender_id": f'{user["role"]}:{user["user_id"]}'}, room=room, include_self=False)
 
 if __name__ == "__main__":
-    import os
-    try:
-        from gevent import pywsgi
-        from geventwebsocket.handler import WebSocketHandler
-    except Exception as e:
-        print("gevent/geventwebsocket not available, falling back to Flask dev server. Error:", e)
-        port = int(os.environ.get("PORT", 5000))
-        app.run(host="0.0.0.0", port=port)
-    else:
-        port = int(os.environ.get("PORT", 5000))
-        http_server = pywsgi.WSGIServer(("0.0.0.0", port), app, handler_class=WebSocketHandler)
-        print(f"Starting local gevent WSGI server on port {port}")
-        http_server.serve_forever()
+    port = int(os.environ.get("PORT", 5000))
+    print(f"🚀 Starting gevent WSGI server with WebSocket support on port {port}")
+    socketio.run(app, host="0.0.0.0", port=port, debug=False, use_reloader=False)
