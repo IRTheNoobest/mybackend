@@ -2718,6 +2718,7 @@ def on_join(data):
     if room and user:
         join_room(room)
         user_rooms[request.sid] = room
+	emit("room_joined", {"room": room}, room=request.sid)
         emit("receive_message", {"user": "System", "message": f"User {user['role']}:{user['user_id']} joined room {room}"}, room=room)
 
 @socketio.on("send_message")
